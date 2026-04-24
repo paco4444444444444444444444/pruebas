@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MISTERIO MORTAL ONLINE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+    <style>
+        :root { --blood: #880808; --dark: #0a0a0a; --paper: #d2b48c; }
+        body { background: var(--dark); color: #eee; font-family: 'Inter', sans-serif; overflow-x: hidden; margin:0; }
+        .vintage { font-family: 'Special Elite', cursive; }
+        .screen { display: none; min-height: 100vh; padding: 20px; flex-direction: column; }
+        .screen.active { display: flex; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .btn-blood { background: var(--blood); color: white; padding: 15px; border-radius: 5px; font-weight: bold; text-transform: uppercase; width: 100%; transition: 0.2s; border:none; cursor:pointer; }
+        .btn-blood:active { transform: scale(0.98); opacity: 0.8; }
+        .card-inner { transition: transform 0.6s; transform-style: preserve-3d; cursor: pointer; position: relative; width: 280px; height: 380px; }
+        .flipped { transform: rotateY(180deg); }
+        .card-front, .card-back { position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        .card-front { background: #1a1a1a; border: 2px solid #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .card-back { background: var(--paper); color: #1a1a1a; transform: rotateY(180deg); text-align: center; border: 4px double #8b4513; }
+        input { outline: none; }
+    </style>
+</head>
+<body>
+
+    <section id="s-home" class="screen active justify-center items-center">
+        <h1 class="vintage text-4xl text-red-700 mb-8 tracking-tighter text-center">MISTERIO MORTAL</h1>
+        <div class="w-full max-w-xs space-y-4">
+            <input id="user-name" type="text" placeholder="Tu nombre" class="w-full p-4 bg-zinc-900 border border-zinc-800 rounded text-white">
+            <button id="btn-create" class="btn-blood">Crear Nueva Sala</button>
+            <div class="relative py-4"><div class="absolute inset-0 flex items-center"><span class="w-full border-t border-zinc-800"></span></div><div class="relative flex justify-center text-xs uppercase"><span class="bg-[#0a0a0a] px-2 text-zinc-500">O unirse a una</span></div></div>
+            <input id="room-input" type="text" placeholder="Código de Sala" class="w-full p-4 bg-zinc-900 border border-zinc-800 rounded text-center uppercase text-white">
+            <button id="btn-join" class="border border-zinc-700 w-full py-4 rounded font-bold hover:bg-zinc-900">Unirse</button>
+        </div>
+    </section>
+
+    <section id="s-lobby" class="screen">
+        <div class="text-center mb-8">
+            <p class="text-zinc-500 text-xs uppercase tracking-widest">Código de Sala</p>
+            <h2 id="display-room-code" class="vintage text-5xl text-red-600 tracking-widest">----</h2>
+        </div>
+        <div class="flex-1">
+            <h3 class="text-sm uppercase text-zinc-500 mb-4 border-b border-zinc-800 pb-2">Jugadores Conectados:</h3>
+            <ul id="player-list" class="space-y-2"></ul>
+        </div>
+        <div id="host-controls" class="hidden">
+            <p class="text-[10px] text-zinc-500 uppercase mb-2">Configuración del Anfitrión</p>
+            <select id="select-scenario" class="w-full bg-zinc-900 p-4 mb-4 rounded border border-zinc-700 text-white"></select>
+            <button id="btn-start" class="btn-blood">Iniciar Investigación</button>
+        </div>
+        <p id="wait-msg" class="text-center text-zinc-500 animate-pulse italic py-4">Esperando a que el anfitrión comience...</p>
+    </section>
+
+    <section id="s-role" class="screen justify-center items-center">
+        <div class="card-inner" id="role-card" onclick="this.classList.toggle('flipped')">
+            <div class="card-front">
+                <span class="text-6xl mb-6">👁️‍🗨️</span>
+                <p class="text-zinc-500 uppercase text-[10px] tracking-[0.3em]">Toca para revelar identidad</p>
+            </div>
+            <div id="role-data" class="card-back"></div>
+        </div>
+        <p class="mt-10 text-zinc-500 text-xs text-center leading-relaxed">No muestres tu pantalla a nadie.<br>El debate comenzará automáticamente.</p>
+    </section>
+
+    <section id="s-debate" class="screen">
+        <div class="flex justify-between items-center border-b border-zinc-800 pb-4 mb-6">
+            <h2 class="vintage text-xl text-red-700">Debate en vivo</h2>
+            <div id="timer" class="text-2xl font-mono text-white bg-zinc-900 px-3 py-1 rounded">03:00</div>
+        </div>
+        <div id="clues" class="space-y-3 flex-1 overflow-y-auto"></div>
+        <div id="vote-prompt" class="hidden pt-6">
+            <button id="btn-go-vote" class="btn-blood">Ir a la Votación Final</button>
+        </div>
+    </section>
+
+    <section id="s-vote" class="screen">
+        <h2 class="vintage text-3xl mb-2 text-center text-red-700">Veredicto</h2>
+        <p class="text-zinc-500 text-sm mb-8 text-center uppercase tracking-widest">¿Quién es el asesino?</p>
+        <div id="vote-grid" class="grid gap-3"></div>
+    </section>
+
+    <section id="s-verdict" class="screen justify-center items-center text-center">
+        <div id="verdict-icon" class="text-6xl mb-4"></div>
+        <h2 id="v-title" class="vintage text-5xl mb-4"></h2>
+        <p id="v-desc" class="text-zinc-400 max-w-xs mb-12 leading-relaxed"></p>
+        <button onclick="location.reload()" class="btn-blood w-64">Nueva Partida</button>
+    </section>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-app.js";
+        import { getDatabase, ref, set, onValue, update, get } from "https://www.gstatic.com/firebasejs/9.17.1/firebase-database.js";
+
+        // CONFIGURACIÓN OFICIAL
+        const firebaseConfig = {
+            apiKey: "AIzaSyBPk4sJphd501DqrxSl8uByk3FjazdFpRc",
+            authDomain: "misteriomortal1.firebaseapp.com",
+            projectId: "misteriomortal1",
+            storageBucket: "misteriomortal1.firebasestorage.app",
+            messagingSenderId: "181346003304",
+            appId: "1:181346003304:web:991bb7ebd8a091d0814edd",
+            databaseURL: "https://misteriomortal1-default-rtdb.europe-west1.firebasedatabase.app"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        const SCENARIOS = [
+            { t: "La Mansión del Conde 🏚️", w: "Estaca de Plata", truth: "El asesino entró por la ventana del ático tras la cena." },
+            { t: "Yate de Millonarios ⛵", w: "Champán Envenenado", truth: "Aprovechó el ruido de los fuegos artificiales." },
+            { t: "Expreso de Medianoche 🚂", w: "Cuerda de Piano", truth: "Sucedió mientras el tren cruzaba el túnel oscuro." },
+            { t: "La Galería de Arte 🖼️", w: "Busto de Mármol", truth: "El asesino se ocultó tras una escultura gigante." },
+            { t: "El Casino de la Fortuna 🎰", w: "Baraja Afilada", truth: "Ocurrió bajo la mesa de la ruleta privada." }
+        ];
+
+        let myId = Math.random().toString(36).substring(7);
+        let myName = "";
+        let currentRoom = null;
+        let isHost = false;
+
+        const nav = (id) => {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        };
+
+        // CREAR SALA
+        document.getElementById('btn-create').onclick = async () => {
+            myName = document.getElementById('user-name').value.trim();
+            if(!myName) return alert("Escribe tu nombre");
+            currentRoom = Math.random().toString(36).substring(2, 6).toUpperCase();
+            isHost = true;
+            
+            await set(ref(db, 'rooms/' + currentRoom), {
+                state: 'LOBBY',
+                host: myId,
+                scenario: Math.floor(Math.random() * SCENARIOS.length),
+                players: { [myId]: { name: myName, id: myId } }
+            });
+            listenToRoom();
+        };
+
+        // UNIRSE A SALA
+        document.getElementById('btn-join').onclick = async () => {
+            myName = document.getElementById('user-name').value.trim();
+            currentRoom = document.getElementById('room-input').value.trim().toUpperCase();
+            if(!myName || !currentRoom) return alert("Nombre y Código obligatorios");
+            
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            const snap = await get(roomRef);
+            if(!snap.exists()) return alert("La sala no existe");
+
+            await update(ref(db, `rooms/${currentRoom}/players/${myId}`), { name: myName, id: myId });
+            listenToRoom();
+        };
+
+        function listenToRoom() {
+            nav('s-lobby');
+            document.getElementById('display-room-code').textContent = currentRoom;
+            
+            onValue(ref(db, 'rooms/' + currentRoom), (snapshot) => {
+                const data = snapshot.val();
+                if(!data) return;
+
+                // Actualizar lista de jugadores
+                const list = document.getElementById('player-list');
+                list.innerHTML = "";
+                Object.values(data.players).forEach(p => {
+                    list.innerHTML += `<li class="bg-zinc-900/50 p-4 rounded border border-zinc-800 flex justify-between">
+                        <span>${p.name}</span>
+                        <span class="text-[10px] text-zinc-600">${p.id === data.host ? 'ANFITRIÓN' : 'CONECTADO'}</span>
+                    </li>`;
+                });
+
+                if(myId === data.host) {
+                    document.getElementById('host-controls').classList.remove('hidden');
+                    document.getElementById('wait-msg').classList.add('hidden');
+                }
+
+                // Sincronización de Estados
+                if(data.state === 'ROLE') showMyRole(data);
+                if(data.state === 'DEBATE') startOnlineDebate(data);
+                if(data.state === 'VOTE') uiShowVoteGrid(data);
+                if(data.state === 'VERDICT') showOnlineVerdict(data);
+            });
+        }
+
+        // INICIAR PARTIDA
+        document.getElementById('btn-start').onclick = async () => {
+            const snap = await get(ref(db, `rooms/${currentRoom}/players`));
+            const players = snap.val();
+            const ids = Object.keys(players);
+            if(ids.length < 2) return alert("Mínimo 2 jugadores (recomendado 4+)");
+            
+            const killerId = ids[Math.floor(Math.random() * ids.length)];
+            const scenarioIdx = document.getElementById('select-scenario').value;
+            
+            update(ref(db, 'rooms/' + currentRoom), {
+                state: 'ROLE',
+                killer: killerId,
+                scenario: scenarioIdx,
+                startTime: Date.now()
+            });
+        };
+
+        function showMyRole(data) {
+            if(document.getElementById('s-role').classList.contains('active')) return;
+            nav('s-role');
+            const isKiller = data.killer === myId;
+            const scenario = SCENARIOS[data.scenario || 0];
+            const roleBox = document.getElementById('role-data');
+            
+            roleBox.innerHTML = `
+                <h2 class="vintage text-4xl mb-4 ${isKiller ? 'text-red-700' : 'text-blue-900'}">${isKiller ? 'ASESINO' : 'INOCENTE'}</h2>
+                <p class="text-[10px] uppercase tracking-widest mb-6 opacity-60">Ficha de Identidad</p>
+                <div class="text-left text-xs space-y-4 border-t border-black/10 pt-4">
+                    <p><strong>Escenario:</strong> ${scenario.t}</p>
+                    <p><strong>Tu Información:</strong> ${isKiller ? scenario.truth : 'Observaste rastro de ' + scenario.w.substring(0,5) + '...'}</p>
+                </div>
+                ${isKiller ? '<p class="mt-8 text-[10px] font-bold text-red-600 animate-pulse">ELIMINA LAS SOSPECHAS SOBRE TI</p>' : ''}
+            `;
+            if(isHost) setTimeout(() => update(ref(db, `rooms/${currentRoom}`), { state: 'DEBATE' }), 10000);
+        }
+
+        function startOnlineDebate(data) {
+            if(document.getElementById('s-debate').classList.contains('active')) return;
+            nav('s-debate');
+            if(isHost) document.getElementById('vote-prompt').classList.remove('hidden');
+            
+            document.getElementById('clues').innerHTML = `
+                <div class="bg-zinc-900 p-4 rounded border-l-4 border-red-700 italic text-sm">
+                    "La investigación ha comenzado. Interrogad a los presentes. El asesino conoce la verdad, los inocentes solo fragmentos."
+                </div>`;
+        }
+
+        document.getElementById('btn-go-vote').onclick = () => {
+            update(ref(db, `rooms/${currentRoom}`), { state: 'VOTE' });
+        };
+
+        async function uiShowVoteGrid(data) {
+            if(document.getElementById('s-vote').classList.contains('active')) return;
+            const players = Object.values(data.players);
+            const grid = document.getElementById('vote-grid');
+            grid.innerHTML = "";
+            players.forEach(p => {
+                const btn = document.createElement('button');
+                btn.className = "bg-zinc-900 p-5 rounded border border-zinc-800 text-left hover:border-red-700 transition active:bg-red-900";
+                btn.innerHTML = `<span class="vintage">${p.name}</span>`;
+                btn.onclick = () => {
+                    update(ref(db, `rooms/${currentRoom}/votes/${myId}`), { target: p.id });
+                    grid.innerHTML = "<p class='text-center py-10 italic text-zinc-500'>Voto registrado. Esperando al resto...</p>";
+                    if(isHost) checkVotesLoop();
+                };
+                grid.appendChild(btn);
+            });
+            nav('s-vote');
+        }
+
+        async function checkVotesLoop() {
+            const roomRef = ref(db, `rooms/${currentRoom}`);
+            onValue(roomRef, (snapshot) => {
+                const data = snapshot.val();
+                if(data.state !== 'VOTE') return;
+                const numPlayers = Object.keys(data.players).length;
+                const numVotes = data.votes ? Object.keys(data.votes).length : 0;
+                
+                if(numVotes >= numPlayers && isHost) {
+                    const votes = Object.values(data.votes);
+                    const counts = {};
+                    votes.forEach(v => counts[v.target] = (counts[v.target] || 0) + 1);
+                    const accusedId = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+                    update(ref(db, `rooms/${currentRoom}`), { state: 'VERDICT', accused: accusedId });
+                }
+            });
+        }
+
+        function showOnlineVerdict(data) {
+            nav('s-verdict');
+            const accused = data.players[data.accused];
+            const isVictory = data.accused === data.killer;
+            
+            document.getElementById('verdict-icon').textContent = isVictory ? "⚖️" : "💀";
+            document.getElementById('v-title').textContent = isVictory ? "¡ATRAPADO!" : "ERROR JUDICIAL";
+            document.getElementById('v-title').className = `vintage text-5xl mb-4 ${isVictory ? 'text-green-600' : 'text-red-600'}`;
+            document.getElementById('v-desc').innerHTML = isVictory ? 
+                `Felicidades. El asesino era <b>${accused.name}</b>. Se ha hecho justicia.` : 
+                `Habéis condenado a <b>${accused.name}</b>, pero era inocente. El verdadero asesino era <b>${data.players[data.killer].name}</b> y ha escapado.`;
+        }
+
+        // Cargar escenarios
+        const select = document.getElementById('select-scenario');
+        SCENARIOS.forEach((s, i) => select.innerHTML += `<option value="${i}">${s.t}</option>`);
+
+    </script>
+</body>
+</html>
